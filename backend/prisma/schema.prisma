@@ -1,0 +1,354 @@
+// ============================================================
+// MODELLO DATI — Prototipo intermediazione mobiliare
+// Database: SQLite (file locale, nessun servizio esterno richiesto).
+// Migrazione a PostgreSQL: cambiare `provider` e DATABASE_URL, nient'altro.
+//
+// NOTA: SQLite non supporta gli enum di Prisma. I campi "enumerati" sono
+// stringhe, con i valori ammessi definiti in `src/domain/enums.ts` e validati
+// dagli schemi JSON delle rotte.
+//
+// NOTA: i valori monetari sono Float (REAL) arrotondati a 2 decimali da
+// `src/lib/money.ts`. In produzione: interi in centesimi o DECIMAL su Postgres.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// IDENTITÀ E ACCESSO
+// ------------------------------------------------------------
+
+/// Utente applicativo. role: CLIENT | ADVISOR | ADMIN
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         String
+  firstName    String
+  lastName     String
+  phone        String?
+  avatarColor  String    @default("#1F3A5F")
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  advisor       Advisor?
+  client        Client?
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@index([role])
+}
+
+/// Sessione mobile revocabile. Viene salvato solo l'hash del refresh token.
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ------------------------------------------------------------
+// ANAGRAFICHE
+// ------------------------------------------------------------
+
+/// Consulente finanziario. Gestisce esclusivamente i clienti assegnati.
+model Advisor {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  code       String   @unique
+  officeCity String
+  bio        String?
+  hiredAt    DateTime
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clients   Client[]
+  proposals Proposal[]
+}
+
+/// Cliente. riskProfile: PRUDENTE | BILANCIATO | DINAMICO | AGGRESSIVO
+model Client {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  advisorId     String
+  clientCode    String   @unique
+  riskProfile   String
+  birthDate     DateTime
+  city          String
+  taxCodeMasked String
+  ibanMasked    String
+  onboardedAt   DateTime
+  createdAt     DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  advisor    Advisor     @relation(fields: [advisorId], references: [id])
+  portfolios Portfolio[]
+  proposals  Proposal[]
+  documents  Document[]
+
+  @@index([advisorId])
+}
+
+// ------------------------------------------------------------
+// CATALOGO STRUMENTI E CATEGORIE
+// ------------------------------------------------------------
+
+/// Categoria di asset allocation. CONFIGURABILE: il sistema non dipende
+/// da un numero fisso di categorie, si legge sempre da questa tabella.
+model AssetClass {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  label       String
+  colorHex    String
+  orderIndex  Int
+  riskLevel   Int
+  description String?
+
+  instruments         Instrument[]
+  snapshotAllocations SnapshotAllocation[]
+  proposalItems       ProposalItem[]
+  proposalAllocations ProposalAllocation[]
+
+  @@index([orderIndex])
+}
+
+/// Strumento finanziario fittizio. type: ETF | FUND | BOND | STOCK | CASH
+model Instrument {
+  id           String  @id @default(cuid())
+  isin         String  @unique
+  name         String
+  type         String
+  currency     String  @default("EUR")
+  issuer       String
+  description  String?
+  assetClassId String
+
+  assetClass    AssetClass     @relation(fields: [assetClassId], references: [id])
+  holdings      Holding[]
+  transactions  Transaction[]
+  proposalItems ProposalItem[]
+
+  @@index([assetClassId])
+}
+
+// ------------------------------------------------------------
+// PATRIMONIO
+// ------------------------------------------------------------
+
+model Portfolio {
+  id           String   @id @default(cuid())
+  clientId     String
+  name         String
+  baseCurrency String   @default("EUR")
+  openedAt     DateTime
+  createdAt    DateTime @default(now())
+
+  client       Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  holdings     Holding[]
+  snapshots    PortfolioSnapshot[]
+  transactions Transaction[]
+
+  @@index([clientId])
+}
+
+/// Posizione aperta (un "investimento" nella UI).
+model Holding {
+  id           String   @id @default(cuid())
+  portfolioId  String
+  instrumentId String
+  quantity     Float
+  avgPrice     Float
+  currentPrice Float
+  costBasis    Float
+  marketValue  Float
+  openedAt     DateTime
+  updatedAt    DateTime @updatedAt
+
+  portfolio  Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [id])
+
+  @@unique([portfolioId, instrumentId])
+  @@index([portfolioId])
+}
+
+/// Fotografia giornaliera del patrimonio: base del grafico e del calendario.
+/// `date` è normalizzata a mezzanotte UTC.
+model PortfolioSnapshot {
+  id            String   @id @default(cuid())
+  portfolioId   String
+  date          DateTime
+  totalValue    Float
+  investedValue Float
+  cashValue     Float
+  pnlAbs        Float
+  pnlPct        Float
+
+  portfolio   Portfolio            @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  allocations SnapshotAllocation[]
+
+  @@unique([portfolioId, date])
+  @@index([date])
+}
+
+/// Composizione del patrimonio per asset class A QUELLA DATA.
+model SnapshotAllocation {
+  id           String @id @default(cuid())
+  snapshotId   String
+  assetClassId String
+  value        Float
+  weightPct    Float
+
+  snapshot   PortfolioSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  assetClass AssetClass        @relation(fields: [assetClassId], references: [id])
+
+  @@unique([snapshotId, assetClassId])
+  @@index([snapshotId])
+}
+
+/// Movimento. type: BUY | SELL | DIVIDEND | COUPON | FEE | DEPOSIT | WITHDRAWAL
+model Transaction {
+  id           String   @id @default(cuid())
+  portfolioId  String
+  instrumentId String?
+  date         DateTime
+  type         String
+  amount       Float
+  quantity     Float?
+  price        Float?
+  currency     String   @default("EUR")
+  description  String
+
+  portfolio  Portfolio   @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument Instrument? @relation(fields: [instrumentId], references: [id])
+
+  @@index([portfolioId, date])
+}
+
+// ------------------------------------------------------------
+// PROPOSTE DI INVESTIMENTO
+// ------------------------------------------------------------
+
+/// status: PENDING | ACCEPTED | REJECTED | EXPIRED
+model Proposal {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  clientId     String
+  advisorId    String
+  title        String
+  description  String
+  rationale    String?
+  amount       Float
+  currency     String    @default("EUR")
+  status       String    @default("PENDING")
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  viewedAt     DateTime?
+  respondedAt  DateTime?
+  responseNote String?
+
+  client      Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  advisor     Advisor              @relation(fields: [advisorId], references: [id])
+  items       ProposalItem[]
+  allocations ProposalAllocation[]
+  documents   Document[]
+
+  @@index([clientId, status])
+  @@index([advisorId, status])
+  @@index([status])
+}
+
+/// Operazione contenuta nella proposta. action: BUY | SELL | SWITCH
+model ProposalItem {
+  id             String  @id @default(cuid())
+  proposalId     String
+  instrumentId   String?
+  instrumentName String
+  assetClassId   String?
+  action         String
+  amount         Float
+  weightPct      Float?
+  note           String?
+
+  proposal   Proposal    @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  instrument Instrument? @relation(fields: [instrumentId], references: [id])
+  assetClass AssetClass? @relation(fields: [assetClassId], references: [id])
+
+  @@index([proposalId])
+}
+
+/// Allocazione attuale vs proposta, per asset class.
+model ProposalAllocation {
+  id           String @id @default(cuid())
+  proposalId   String
+  assetClassId String
+  currentPct   Float
+  proposedPct  Float
+
+  proposal   Proposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  assetClass AssetClass @relation(fields: [assetClassId], references: [id])
+
+  @@unique([proposalId, assetClassId])
+}
+
+// ------------------------------------------------------------
+// DOCUMENTI
+// ------------------------------------------------------------
+
+/// PDF fittizio. category: PROPOSAL | REPORT | CONTRACT | STATEMENT
+model Document {
+  id         String   @id @default(cuid())
+  clientId   String
+  proposalId String?
+  title      String
+  category   String
+  fileName   String
+  mimeType   String   @default("application/pdf")
+  sizeBytes  Int
+  storageKey String
+  createdAt  DateTime @default(now())
+
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  proposal Proposal? @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([proposalId])
+}
+
+// ------------------------------------------------------------
+// AUDIT
+// ------------------------------------------------------------
+
+/// Tracciamento delle azioni sensibili (login, proposte, accettazioni, ...).
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  actorEmail String?
+  actorRole  String?
+  action     String
+  entityType String?
+  entityId   String?
+  ip         String?
+  userAgent  String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

@@ -1,0 +1,311 @@
+###############################################################################
+# PROTOTIPO — COLLEZIONE DI RICHIESTE
+#
+# Come usarla:
+#   VS Code + estensione "REST Client" (humao.rest-client) → premere "Send Request"
+#   sopra ogni blocco. In alternativa: Swagger UI su http://localhost:4000/docs
+#
+# Ordine consigliato: eseguire prima un login, poi le richieste del ruolo.
+###############################################################################
+
+@host = http://localhost:4000
+@api = {{host}}/api/v1
+@password = Demo1234!
+
+###############################################################################
+# 1. SISTEMA — nessuna autenticazione richiesta
+###############################################################################
+
+### Stato del servizio
+GET {{api}}/health
+
+### Sorgente dati attiva (dimostra che il prototipo NON dipende da Guardian)
+GET {{api}}/system/data-source
+
+### Asset class configurate (categorie NON fisse nel codice)
+GET {{api}}/meta/asset-classes
+
+### Credenziali demo
+GET {{api}}/auth/demo-accounts
+
+###############################################################################
+# 2. CLIENTE
+###############################################################################
+
+### Login cliente
+# @name loginCliente
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "mario.rossi@cliente.demo.local",
+  "password": "{{password}}"
+}
+
+@tokenCliente = {{loginCliente.response.body.data.accessToken}}
+@refreshCliente = {{loginCliente.response.body.data.refreshToken}}
+
+### Utente autenticato (il campo role instrada la navigazione dell'app)
+GET {{api}}/auth/me
+Authorization: Bearer {{tokenCliente}}
+
+### HOME — schermata completa in una sola richiesta
+GET {{api}}/client/home
+Authorization: Bearer {{tokenCliente}}
+
+### Anagrafica e consulente di riferimento
+GET {{api}}/client/profile
+Authorization: Bearer {{tokenCliente}}
+
+### Patrimonio: totale, variazioni, asset allocation
+GET {{api}}/client/portfolio/summary
+Authorization: Bearer {{tokenCliente}}
+
+### Evoluzione del patrimonio — 1 mese
+GET {{api}}/client/portfolio/history?range=1M
+Authorization: Bearer {{tokenCliente}}
+
+### Evoluzione del patrimonio — massimo storico, alleggerito per il grafico mobile
+GET {{api}}/client/portfolio/history?range=MAX&maxPoints=80
+Authorization: Bearer {{tokenCliente}}
+
+### Evoluzione del patrimonio — periodo personalizzato
+GET {{api}}/client/portfolio/history?from=2026-01-01&to=2026-06-30
+Authorization: Bearer {{tokenCliente}}
+
+### CALENDARIO — patrimonio a una data specifica
+GET {{api}}/client/portfolio/snapshot?date=2026-06-15
+Authorization: Bearer {{tokenCliente}}
+
+### Asset allocation a una data passata
+GET {{api}}/client/portfolio/allocation?date=2025-12-31
+Authorization: Bearer {{tokenCliente}}
+
+### Investimenti
+GET {{api}}/client/investments
+Authorization: Bearer {{tokenCliente}}
+
+### Movimenti
+GET {{api}}/client/transactions?page=1&pageSize=10
+Authorization: Bearer {{tokenCliente}}
+
+### Proposte ricevute
+# @name proposteCliente
+GET {{api}}/client/proposals
+Authorization: Bearer {{tokenCliente}}
+
+@proposalId = {{proposteCliente.response.body.data.0.id}}
+
+### Dettaglio proposta (registra la presa visione)
+GET {{api}}/client/proposals/{{proposalId}}
+Authorization: Bearer {{tokenCliente}}
+
+### ACCETTAZIONE della proposta (simulazione UX, non firma elettronica)
+POST {{api}}/client/proposals/{{proposalId}}/accept
+Authorization: Bearer {{tokenCliente}}
+Content-Type: application/json
+
+{
+  "note": "Procediamo pure."
+}
+
+### RIFIUTO della proposta
+POST {{api}}/client/proposals/{{proposalId}}/reject
+Authorization: Bearer {{tokenCliente}}
+Content-Type: application/json
+
+{
+  "note": "Preferisco attendere il prossimo trimestre."
+}
+
+### Documenti del cliente
+# @name documentiCliente
+GET {{api}}/client/documents
+Authorization: Bearer {{tokenCliente}}
+
+@documentId = {{documentiCliente.response.body.data.0.id}}
+
+### Apertura del PDF nel visualizzatore
+GET {{api}}/documents/{{documentId}}/file
+Authorization: Bearer {{tokenCliente}}
+
+### Download del PDF
+GET {{api}}/documents/{{documentId}}/file?download=true
+Authorization: Bearer {{tokenCliente}}
+
+### Rinnovo sessione
+POST {{api}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshCliente}}"
+}
+
+###############################################################################
+# 3. CONSULENTE
+###############################################################################
+
+### Login consulente
+# @name loginConsulente
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "giulia.ferrari@consulente.demo.local",
+  "password": "{{password}}"
+}
+
+@tokenConsulente = {{loginConsulente.response.body.data.accessToken}}
+
+### Dashboard del consulente
+GET {{api}}/advisor/dashboard
+Authorization: Bearer {{tokenConsulente}}
+
+### Clienti assegnati
+# @name clientiConsulente
+GET {{api}}/advisor/clients?sort=value_desc
+Authorization: Bearer {{tokenConsulente}}
+
+@clientId = {{clientiConsulente.response.body.data.0.id}}
+
+### Ricerca cliente per nome
+GET {{api}}/advisor/clients?search=Rossi
+Authorization: Bearer {{tokenConsulente}}
+
+### Solo clienti con proposte in attesa
+GET {{api}}/advisor/clients?onlyPendingProposals=true
+Authorization: Bearer {{tokenConsulente}}
+
+### Dettaglio cliente
+GET {{api}}/advisor/clients/{{clientId}}
+Authorization: Bearer {{tokenConsulente}}
+
+### Storico del cliente
+GET {{api}}/advisor/clients/{{clientId}}/portfolio/history?range=1Y
+Authorization: Bearer {{tokenConsulente}}
+
+### Patrimonio del cliente a una data
+GET {{api}}/advisor/clients/{{clientId}}/portfolio/snapshot?date=2026-03-31
+Authorization: Bearer {{tokenConsulente}}
+
+### Investimenti del cliente
+GET {{api}}/advisor/clients/{{clientId}}/investments
+Authorization: Bearer {{tokenConsulente}}
+
+### Proposte del cliente
+GET {{api}}/advisor/clients/{{clientId}}/proposals
+Authorization: Bearer {{tokenConsulente}}
+
+### Catalogo strumenti (per il wizard di creazione)
+# @name catalogo
+GET {{api}}/advisor/catalog/instruments?search=ETF
+Authorization: Bearer {{tokenConsulente}}
+
+@instrumentA = {{catalogo.response.body.data.0.id}}
+@instrumentB = {{catalogo.response.body.data.1.id}}
+
+### CREAZIONE DI UNA PROPOSTA
+POST {{api}}/advisor/proposals
+Authorization: Bearer {{tokenConsulente}}
+Content-Type: application/json
+
+{
+  "clientId": "{{clientId}}",
+  "title": "Ribilanciamento del portafoglio",
+  "description": "Il peso della componente azionaria supera il profilo concordato. Proponiamo un riallineamento verso l'allocazione obiettivo.",
+  "rationale": "Riduzione della concentrazione azionaria e rientro nei limiti del profilo di rischio.",
+  "amount": 30000,
+  "expiresInDays": 21,
+  "items": [
+    { "instrumentId": "{{instrumentA}}", "action": "BUY", "amount": 18000 },
+    { "instrumentId": "{{instrumentB}}", "action": "BUY", "amount": 12000 }
+  ],
+  "proposedAllocation": [
+    { "assetClassKey": "azionario", "proposedPct": 32 },
+    { "assetClassKey": "obbligazionario", "proposedPct": 30 },
+    { "assetClassKey": "fondi", "proposedPct": 22 },
+    { "assetClassKey": "liquidita", "proposedPct": 9 },
+    { "assetClassKey": "monetario", "proposedPct": 4 },
+    { "assetClassKey": "alternativi", "proposedPct": 3 }
+  ],
+  "attachDocument": true
+}
+
+### Tutte le proposte del consulente
+GET {{api}}/advisor/proposals?status=PENDING
+Authorization: Bearer {{tokenConsulente}}
+
+###############################################################################
+# 4. DIREZIONE (BOSS)
+###############################################################################
+
+### Login direzione
+# @name loginBoss
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "direzione@demo.local",
+  "password": "{{password}}"
+}
+
+@tokenBoss = {{loginBoss.response.body.data.accessToken}}
+
+### Dashboard aziendale (KPI + grafici)
+GET {{api}}/admin/analytics/overview
+Authorization: Bearer {{tokenBoss}}
+
+### Patrimonio aziendale nel tempo
+GET {{api}}/admin/analytics/aum-history?range=1Y&maxPoints=60
+Authorization: Bearer {{tokenBoss}}
+
+### Asset allocation aziendale
+GET {{api}}/admin/analytics/allocation
+Authorization: Bearer {{tokenBoss}}
+
+### Analisi delle proposte (imbuto, tasso di accettazione, andamento mensile)
+GET {{api}}/admin/analytics/proposals
+Authorization: Bearer {{tokenBoss}}
+
+### Consulenti: patrimonio, clienti, tasso di accettazione
+GET {{api}}/admin/advisors
+Authorization: Bearer {{tokenBoss}}
+
+### Clienti dell'azienda
+GET {{api}}/admin/clients?page=1&pageSize=20
+Authorization: Bearer {{tokenBoss}}
+
+### Tutte le proposte
+GET {{api}}/admin/proposals?status=ACCEPTED
+Authorization: Bearer {{tokenBoss}}
+
+### Registro delle attività (audit log)
+GET {{api}}/admin/audit?pageSize=20
+Authorization: Bearer {{tokenBoss}}
+
+### Riepilogo attività per tipo
+GET {{api}}/admin/audit/summary
+Authorization: Bearer {{tokenBoss}}
+
+###############################################################################
+# 5. VERIFICHE DI SICUREZZA (devono FALLIRE)
+###############################################################################
+
+### Rotta protetta senza token → 401
+GET {{api}}/client/home
+
+### Cliente che tenta di entrare nell'area consulente → 403
+GET {{api}}/advisor/dashboard
+Authorization: Bearer {{tokenCliente}}
+
+### Cliente che tenta di entrare nell'area direzione → 403
+GET {{api}}/admin/analytics/overview
+Authorization: Bearer {{tokenCliente}}
+
+### Consulente che tenta di leggere le analytics aziendali → 403
+GET {{api}}/admin/analytics/overview
+Authorization: Bearer {{tokenConsulente}}
+
+### Consulente su un cliente non assegnato → 404 (non 403: nessuna enumerazione)
+GET {{api}}/advisor/clients/cli_20
+Authorization: Bearer {{tokenConsulente}}

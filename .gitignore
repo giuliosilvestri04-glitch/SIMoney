@@ -1,0 +1,44 @@
+# ============================================================
+# Prototipo App Mobile — regole comuni al repository
+# I sottoprogetti hanno un .gitignore dedicato (backend/, mobile/)
+# ============================================================
+
+# Dipendenze
+node_modules/
+
+# Build e output temporanei
+dist/
+build/
+.bundle-check/
+*.tsbuildinfo
+
+# Segreti e configurazioni locali
+.env
+.env.local
+.env.*.local
+
+# Database locale del prototipo (rigenerabile con `npm run setup`)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Log
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Cache degli strumenti
+.expo/
+.metro-health-check*
+.cache/
+__pycache__/
+
+# Sistema operativo / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json

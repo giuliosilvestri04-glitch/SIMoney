@@ -1,0 +1,20 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Segreti locali
+.env
+.env.local
+
+# Log
+*.log
+
+# Database del prototipo (rigenerabile con `npm run setup`)
+prisma/*.db
+prisma/*.db-journal
+prisma/dev.db*
+prisma/test.db*
+
+# Documenti PDF fittizi generati dal seed e dai test
+storage/
+storage-test/
