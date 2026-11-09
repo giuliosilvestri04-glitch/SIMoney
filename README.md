@@ -1,5 +1,7 @@
 # SIMoney — Mobile Portfolio & Investment Management Prototype
 
+📄 **[Project Presentation (PDF)](docs/SIMoney-presentation.pdf)**
+
 A fully functional mobile application prototype for financial advisory, enabling clients to monitor their portfolio and manage investment proposals from a modern, lightweight interface — a concrete alternative to the browser-based platforms typically used in this sector.
 
 This is not a mockup: it has a real REST backend, a database populated with two years of daily history, and a mobile app that communicates with it end-to-end.
@@ -54,6 +56,12 @@ Role enforcement is server-side: a user cannot access or request data outside th
 | Animations | react-native-reanimated | 4 |
 | Secure storage | expo-secure-store | — |
 | PDF sharing | expo-file-system + expo-sharing | — |
+
+### AI Tooling
+
+| Tool | Role |
+|---|---|
+| [Claude Code](https://claude.ai/code) | AI coding assistant used throughout development (architecture, implementation, refactoring, documentation) |
 
 ### Backend (`/backend`)
 
@@ -147,7 +155,7 @@ The data source abstraction (`PortfolioDataProvider` interface in `src/providers
 ├── mobile/             Expo / React Native app
 │   ├── app/            expo-router routes, one folder per role
 │   └── src/            API client, design system, charts, domain components
-└── docs/               analysis, API reference, delivery guide, presentation
+└── docs/               analysis, screenshots, presentation
 ```
 
 ---
@@ -195,9 +203,7 @@ The database (`prisma/dev.db`) and generated PDFs (`storage/`) are **not version
 | Document | Contents |
 |---|---|
 | [docs/00-ANALISI.md](docs/00-ANALISI.md) | Full analysis: requirements, architecture, tech choices and rationale, data model, roles, authorizations, flows |
-| [docs/01-API.md](docs/01-API.md) | API reference with request/response examples |
-| [docs/02-CONSEGNA.md](docs/02-CONSEGNA.md) | APK and iOS build, private distribution, presentation guide |
-| [docs/Prototipo-App-Mobile.pptx](docs/Prototipo-App-Mobile.pptx) | Prototype presentation (21 slides, editable) — also available as [PDF](docs/Prototipo-App-Mobile.pdf) |
+| [docs/SIMoney-presentation.pdf](docs/SIMoney-presentation.pdf) | Project presentation (PDF) |
 | [backend/README.md](backend/README.md) | Backend installation, configuration, startup and tests |
 | [mobile/README.md](mobile/README.md) | App structure, product decisions, commands, build |
 | `http://localhost:4000/docs` | Interactive Swagger UI (requires backend running) |
